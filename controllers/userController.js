@@ -11,32 +11,41 @@ const generateJwt = (id, email, role) => {
   )
 }
 class UserController {
-async registration(req, res, next) {
-  const {email, password} = req.body;
- 
-  if(!password || !email) {
-    return next(ApiError.badRequest('Incorrect name or email'))
+
+  async registration(req, res, next) {
+    const {email, password} = req.body;
+  
+    if(!password || !email) {
+      return next(ApiError.badRequest('Incorrect name or email'))
+    };
+
+    const existingUser = await People.findOne({where: {email}})
+    if (existingUser) {
+        return next(ApiError.badRequest(`User with this email ${email} already exists`))
+    };
+
+    const hashPassword = await bcrypt.hash(password, 5);
+    const user = await People.create({email, password: hashPassword});
+    const jwtToken = generateJwt(user.id, email);
+    res.json({jwtToken});
   };
 
-  const existingUser = await People.findOne({where: {email}})
-  if (existingUser) {
-      return next(ApiError.badRequest(`User with this email ${email} already exists`))
-  };
-
-  const hashPassword = await bcrypt.hash(password, 5);
-  const user = await People.create({email, password: hashPassword});
-  const jwtToken = generateJwt(user.id, email);
-  res.json({jwtToken});
-};
-
-  async createUser(req, res, next) {
-    const {name, email} = req.body;
+  async login(req, res, next) {
+    const {email,password} = req.body;
     const userRegistered= await People.findOne({where:{email}});
-    if(userRegistered) {
-      return next(ApiError.badRequest('incorrect mail'))
+
+    if(!userRegistered) {
+      return next(ApiError.internal('No user found with this email'));
     }
-    const user = await People.create({name, email});
-    return res.json(user);
+
+    const comparePassword = bcrypt.compareSync(password, userRegistered.password);
+
+    if(!comparePassword) {
+      return next(ApiError.internal( 'Wrong password specified'))
+    }
+
+    const token = generateJwt(userRegistered.email, userRegistered.password);
+    return res.json({token});  
   }
 
   async getAll(req, res) {
@@ -45,7 +54,7 @@ async registration(req, res, next) {
   }
 
   async check(req, res) {
-    const {id} = req.query 
+    res.json({message: 'All right'})
   }
 }
 
